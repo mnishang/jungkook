@@ -7,7 +7,7 @@ const items = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { to: '/find-buddy', label: 'Find Study Buddy', Icon: UserRoundPlus },
   { to: '/groups', label: 'Study Groups', Icon: Users },
-  { to: '/messages', label: 'Messages', Icon: MessageSquare, badge: '3' },
+  { to: '/messages', label: 'Messages', Icon: MessageSquare },
   { to: '/sessions', label: 'Study Sessions', Icon: CalendarDays },
   { to: '/notes', label: 'Notes & Resources', Icon: FileText },
   { to: '/tasks', label: 'My Tasks', Icon: CheckSquare },
@@ -21,12 +21,13 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { user } = useStudyBuddy()
+  const { user, unread } = useStudyBuddy()
   const initial = (user.name.trim()[0] ?? 'K').toUpperCase()
   const avatar = user.photo
     ? <img className="avatar-img" src={user.photo} alt="Profile"/>
     : <div className="avatar">{initial}</div>
   const title = items.find(i => i.to === location.pathname)?.label ?? (location.pathname === '/profile' ? 'Profile' : 'Dashboard')
+  const unreadCount = user.notifMessages ? (unread[user.name] || 0) : 0
 
   useEffect(() => {
     if (!menuOpen) return
@@ -39,12 +40,12 @@ export default function AppLayout() {
   return <div className="app-shell">
     <aside className="sidebar">
       <NavLink to="/" className="brand"><span className="brand-mark">✦</span><span><b>Study<span className="brand-accent">Buddy</span></b><small>Study Together. Achieve More.</small></span></NavLink>
-      <nav>{items.map(({ to, label, Icon, badge }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Icon size={17}/><span>{label}</span>{badge && <em>{badge}</em>}</NavLink>)}</nav>
+      <nav>{items.map(({ to, label, Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Icon size={17}/><span>{label}</span>{to === '/messages' && unreadCount > 0 && <em>{unreadCount}</em>}</NavLink>)}</nav>
       <div className="sidebar-quote">Small steps<br/>today,<br/>big dreams<br/>tomorrow. <span>♡</span></div>
       <NavLink to="/profile" className="sidebar-profile">{avatar}<div><b>{user.name}</b><small>{user.course} {user.year}</small></div></NavLink>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="search-box"><Search size={17}/><input placeholder="Search for study buddies, groups, or topics..." /></div><button className="icon-button" aria-label="Notifications"><Bell size={19}/><i/></button><div className="top-profile" ref={menuRef}>
+      <header className="topbar"><div className="search-box"><Search size={17}/><input placeholder="Search for study buddies, groups, or topics..." /></div><button className="icon-button" aria-label="Notifications"><Bell size={19}/>{unreadCount > 0 && <i>{unreadCount}</i>}</button><div className="top-profile" ref={menuRef}>
         <button className="profile-trigger" onClick={() => setMenuOpen(o => !o)} aria-label="Account menu" aria-expanded={menuOpen}>
           {avatar}
           <div><b>Hi, {user.name}!</b></div>

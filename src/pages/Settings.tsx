@@ -8,7 +8,8 @@ const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']
 const notifOptions = [
   { key: 'reminders', title: 'Study reminders', desc: 'Receive reminders for upcoming sessions.' },
   { key: 'activity', title: 'Group activity', desc: 'Get notified when your group posts.' },
-  { key: 'summary', title: 'Weekly summary', desc: 'A weekly recap of your study progress.' }
+  { key: 'summary', title: 'Weekly summary', desc: 'A weekly recap of your study progress.' },
+  { key: 'messages', title: 'Buddy messages', desc: 'Show a notification badge when study buddies send you messages.' }
 ] as const
 type NotifKey = typeof notifOptions[number]['key']
 type Tab = 'personal' | 'password' | 'notifications' | 'privacy'
@@ -74,7 +75,11 @@ export default function Settings() {
   }
 
   // Notifications
-  const [prefs, setPrefs] = useState<Record<NotifKey, boolean>>({ reminders: true, activity: true, summary: false })
+  const [prefs, setPrefs] = useState<Record<NotifKey, boolean>>({ reminders: true, activity: true, summary: false, messages: user.notifMessages })
+  const togglePref = (key: NotifKey, val: boolean) => {
+    setPrefs(p => ({ ...p, [key]: val }))
+    if (key === 'messages') updateUser({ notifMessages: val })
+  }
 
   return <>
     <PageHeader title="Settings" subtitle="Manage your profile and preferences." />
@@ -149,7 +154,7 @@ export default function Settings() {
           {notifOptions.map(({ key, title, desc }) => (
             <label className="toggle-line" key={key}>
               <span><b>{title}</b><small>{desc}</small></span>
-              <input type="checkbox" checked={prefs[key]} onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))} />
+              <input type="checkbox" checked={prefs[key]} onChange={e => togglePref(key, e.target.checked)} />
             </label>
           ))}
         </>}
