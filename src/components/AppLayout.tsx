@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, BookOpen, CalendarDays, CheckSquare, CircleHelp, FileText, Flame, LayoutDashboard, LogOut, MessageSquare, Search, Settings, Timer, Trophy, UserRound, Users, UserRoundPlus } from 'lucide-react'
 import { useStudyBuddy } from '../context/StudyBuddyContext'
+import { timeAgo } from '../lib/utils'
 
 const items = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
@@ -20,8 +21,10 @@ export default function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { user, unread } = useStudyBuddy()
+  const notifRef = useRef<HTMLDivElement>(null)
+  const { user, unread, notifications, unreadNotifs, markAllRead } = useStudyBuddy()
   const initial = (user.name.trim()[0] ?? 'K').toUpperCase()
   const avatar = user.photo
     ? <img className="avatar-img" src={user.photo} alt="Profile"/>
@@ -36,16 +39,34 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', close)
   }, [menuOpen])
 
-  useEffect(() => setMenuOpen(false), [location.pathname])
+  useEffect(() => {
+    if (!notifOpen) return
+    const close = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [notifOpen])
+
+  useEffect(() => { if (notifOpen) markAllRead() }, [notifOpen, markAllRead])
+
+  useEffect(() => { setMenuOpen(false); setNotifOpen(false) }, [location.pathname])
   return <div className="app-shell">
     <aside className="sidebar">
-      <NavLink to="/" className="brand"><span className="brand-mark">✦</span><span><b>Study<span className="brand-accent">Buddy</span></b><small>Study Together. Achieve More.</small></span></NavLink>
+      <NavLink to="/" className="brand"><img className="brand-logo inverted" src="/logo.png" alt="StudyBuddy"/><small>Study Together. Achieve More.</small></NavLink>
       <nav>{items.map(({ to, label, Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Icon size={17}/><span>{label}</span>{to === '/messages' && unreadCount > 0 && <em>{unreadCount}</em>}</NavLink>)}</nav>
-      <div className="sidebar-quote">Small steps<br/>today,<br/>big dreams<br/>tomorrow. <span>♡</span></div>
       <NavLink to="/profile" className="sidebar-profile">{avatar}<div><b>{user.name}</b><small>{user.course} {user.year}</small></div></NavLink>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="search-box"><Search size={17}/><input placeholder="Search for study buddies, groups, or topics..." /></div><button className="icon-button" aria-label="Notifications"><Bell size={19}/>{unreadCount > 0 && <i>{unreadCount}</i>}</button><div className="top-profile" ref={menuRef}>
+      <header className="topbar"><div className="search-box"><Search size={17}/><input placeholder="Search for study buddies, groups, or topics..." /></div><div className="notif-wrap" ref={notifRef}>
+        <button className={`icon-button ${unreadNotifs > 0 ? 'has-notif' : ''}`} aria-label="Notifications" aria-expanded={notifOpen} onClick={() => setNotifOpen(o => !o)}>
+          <Bell size={19}/>{unreadNotifs > 0 && <i>{unreadNotifs}</i>}
+        </button>
+        {notifOpen && <div className="notif-panel">
+          <div className="notif-head"><b>Notifications</b>{unreadNotifs > 0 && <small>{unreadNotifs} new</small>}</div>
+          {notifications.length === 0
+            ? <p className="notif-empty">No notifications yet — buddy connections, group posts, Q&A comments, points and tasks will show up here.</p>
+            : notifications.map(n => <div className={`notif-item ${n.read ? '' : 'unread'}`} key={n.id}><span>{n.text}</span><time>{timeAgo(n.at)}</time></div>)}
+        </div>}
+      </div><div className="top-profile" ref={menuRef}>
         <button className="profile-trigger" onClick={() => setMenuOpen(o => !o)} aria-label="Account menu" aria-expanded={menuOpen}>
           {avatar}
           <div><b>Hi, {user.name}!</b></div>

@@ -3,14 +3,13 @@ import { BookOpen, Flame, Users, Star, CalendarDays, Video, Clock3, UserRoundPlu
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import { Card, PrimaryButton } from '../components/UI'
-import { sessions } from '../lib/data'
-import { useStudyBuddy } from '../context/StudyBuddyContext'
-import type { User } from '../context/StudyBuddyContext'
+import { openGoogleMeet, sessionDateLabel, sessionTimeLabel, todayKey } from '../lib/utils'
+import { avatarInitials, useStudyBuddy, type User } from '../context/StudyBuddyContext'
 
 function ProfileModal({ buddy, onClose }: { buddy: User; onClose: () => void }) {
   const { user, connectBuddy, disconnectBuddy } = useStudyBuddy()
   const isConnected = user.connectedBuddies.includes(buddy.name)
-  const initials = buddy.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+  const initials = avatarInitials(buddy.name)
   return <div className="modal-overlay" onClick={onClose}>
     <div className="modal-card" onClick={e => e.stopPropagation()}>
       <button className="modal-close" onClick={onClose}><X size={18}/></button>
@@ -27,8 +26,11 @@ function ProfileModal({ buddy, onClose }: { buddy: User; onClose: () => void }) 
 }
 
 export default function Dashboard() {
-  const { tasks, toggleTask, user, allUsers, connectBuddy, disconnectBuddy } = useStudyBuddy()
+  const { tasks, toggleTask, user, allUsers, connectBuddy, disconnectBuddy, sessions, joinSession, deleteSession } = useStudyBuddy()
   const [selectedBuddy, setSelectedBuddy] = useState<User | null>(null)
+  const nextSession = sessions
+    .filter(s => s.date >= todayKey())
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))[0]
   const stats = [
     { label: 'Study Today', value: '2h 35m', sub: '/ 4h goal', Icon: BookOpen },
     { label: 'Study Streak', value: `${user.streak} Day${user.streak !== 1 ? 's' : ''}`, sub: user.streak > 0 ? 'Keep it up!' : 'Start today!', Icon: Flame },
@@ -41,7 +43,23 @@ export default function Dashboard() {
     <div className="stats-grid">{stats.map(({ label, value, sub, Icon }) => <div className="stat-card" key={label}><Icon/><div><small>{label}</small><strong>{value}</strong><span>{sub}</span></div></div>)}</div>
     <div className="dashboard-grid"><div className="stack">
       <Card title="Upcoming Study Session" action={<Link className="text-link" to="/sessions">View All</Link>}>
-        <div className="session-row"><div className="session-symbol">&lt;/&gt;</div><div className="session-detail"><h3>{sessions[0].title}</h3><p>Today • 7:00 PM – 9:00 PM</p><small><Users size={14}/> 4 participants <span>•</span><Video size={14}/> Google Meet</small></div><PrimaryButton>Join Session</PrimaryButton></div>
+        {nextSession ? (
+          <div className="session-row">
+            <div className="session-symbol">&lt;/&gt;</div>
+            <div className="session-detail">
+              <h3>{nextSession.title}</h3>
+              <p>{sessionDateLabel(nextSession.date)} • {sessionTimeLabel(nextSession.time)}</p>
+              <small><Users size={14}/> {nextSession.people} participant{nextSession.people !== 1 ? 's' : ''} <span>•</span><Video size={14}/> {nextSession.code ? `meet.google.com/${nextSession.code}` : 'Google Meet'}</small>
+            </div>
+            <div className="session-actions">
+              <PrimaryButton onClick={() => { joinSession(nextSession.id); openGoogleMeet(nextSession.code) }} disabled={nextSession.date !== todayKey()}>{nextSession.joined ? 'Rejoin' : 'Join Session'}</PrimaryButton>
+              {nextSession.date !== todayKey() && <small className="join-hint">Joinable on {sessionDateLabel(nextSession.date)}</small>}
+              <button className="btn-soft" onClick={() => deleteSession(nextSession.id)}>Delete Session</button>
+            </div>
+          </div>
+        ) : (
+          <p className="empty-state">No sessions yet. Create one to plan a study session with your buddy!</p>
+        )}
       </Card>
       <Card title="Recommended Study Buddies" action={<Link className="text-link" to="/find-buddy">View All</Link>}>
         {recommendedBuddies.length === 0 ? (
@@ -49,10 +67,10 @@ export default function Dashboard() {
         ) : (
           <div className="buddy-grid">{recommendedBuddies.map(b => {
             const isConnected = user.connectedBuddies.includes(b.name)
-            const initials = b.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            const initials = avatarInitials(b.name)
             return <article className="buddy-card clickable" key={b.name} onClick={() => setSelectedBuddy(b)}>
               <span className="match-pill">{b.course}</span>
-              <div className="person-avatar">{initials}</div>
+              <div className="person-avatar">{b.photo ? <img src={b.photo} alt={b.name}/> : initials}</div>
               <h3>{b.name}</h3>
               <small>{b.year}</small>
               <p>{b.subjects.length > 0 ? b.subjects.join(' • ') : 'No subjects yet'}</p>

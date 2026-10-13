@@ -1,7 +1,8 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Bell, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Bell, LockKeyhole, ShieldCheck, Trash2, UserRound } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-import { useStudyBuddy } from '../context/StudyBuddyContext'
+import { BOT_NAME, useStudyBuddy } from '../context/StudyBuddyContext'
 
 const courses = ['BSHM', 'BSED', 'BEED', 'BSIT']
 const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']
@@ -15,8 +16,22 @@ type NotifKey = typeof notifOptions[number]['key']
 type Tab = 'personal' | 'password' | 'notifications' | 'privacy'
 
 export default function Settings() {
-  const { user, updateUser } = useStudyBuddy()
+  const { user, updateUser, deleteAccount } = useStudyBuddy()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('personal')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = setTimeout(() => setConfirmDelete(false), 2500)
+    return () => clearTimeout(t)
+  }, [confirmDelete])
+
+  const handleDeleteAccount = () => {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    deleteAccount()
+    navigate('/')
+  }
 
   // Personal information
   const [name, setName] = useState(user.name)
@@ -161,7 +176,13 @@ export default function Settings() {
         {tab === 'privacy' && <>
           <h2>Privacy & Security</h2>
           <p>Manage your privacy and security settings.</p>
-          <div className="construction">🚧 In construction</div>
+          <div className="danger-zone">
+            <h3>Delete Account</h3>
+            <p>Deleting your account permanently removes your profile, photo, and all your questions & answers from the community. This action can't be undone.</p>
+            {user.name === BOT_NAME
+              ? <small className="save-note">The bot assistant account can't be deleted.</small>
+              : <button type="button" className={`btn-soft danger ${confirmDelete ? 'confirming' : ''}`} onClick={handleDeleteAccount}><Trash2 size={14}/> {confirmDelete ? 'Click again to confirm deletion' : 'Delete my account'}</button>}
+          </div>
         </>}
       </section>
     </div>

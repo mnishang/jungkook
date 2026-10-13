@@ -2,9 +2,8 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Users, BookOpen, CalendarDays } from 'lucide-react'
 export default function Landing(){return <div className="landing">
     <header className="landing-nav"><Link to="/" className="brand">
-    <span className="brand-mark">✦</span><span>
-        <b>Study<span className="brand-accent">Buddy</span></b>
-        <small>Study Together. Achieve More.</small></span>
+    <img className="brand-logo" src="/logo.png" alt="StudyBuddy"/>
+    <small>Study Together. Achieve More.</small>
         </Link><nav></nav><div><Link className="login-link" to="/login">Log in</Link>
         <Link className="btn-primary" to="/signup">Get Started</Link></div></header>
         <main className="landing-hero"><div className="landing-copy">
@@ -16,11 +15,7 @@ export default function Landing(){return <div className="landing">
                 <a className="btn-outline" href="#features">Learn More</a></div><div className="social-proof">
                     <div className="avatar-stack"><span>MS</span><span>JR</span><span>AC</span>
                     </div><p><b>Join 1,000+ students</b><small>already studying together</small>
-                    </p></div></div><div className="landing-visual"><div className="visual-glow"/>
-                    <div className="notebook">
-                        <span>Better<br/>Students<br/>Brighter<br/>Futures</span><b>♡</b></div>
-                        <div className="coffee">☕</div><div className="floating-card"><BookOpen/><span><b>Study smarter</b>
-                        <small>One session at a time</small></span></div></div></main>
+                    </p></div></div><div className="landing-visual"><div className="visual-glow"/><img className="hero-img" src="/hero.png" alt="Students studying together"/></div></main>
                         <section id="features" className="landing-features">
                             <h2>Everything you need to study better</h2><div><article><Users/>
                             <h3>Find your people</h3><p>Meet study buddies who share your subjects and goals.</p>
