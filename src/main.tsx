@@ -7,9 +7,9 @@ import Dashboard from './pages/Dashboard'
 import FindBuddy from './pages/FindBuddy'
 import StudyGroups from './pages/StudyGroups'
 import StudySessions from './pages/StudySessions'
+import StudyProgress from './pages/StudyProgress'
 import NotesResources from './pages/NotesResources'
 import MyTasks from './pages/MyTasks'
-import StudyTimer from './pages/StudyTimer'
 import Messages from './pages/Messages'
 import QA from './pages/QA'
 import Leaderboard from './pages/Leaderboard'
@@ -32,9 +32,9 @@ function App() {
       <Route path="/find-buddy" element={<FindBuddy />} />
       <Route path="/groups" element={<StudyGroups />} />
       <Route path="/sessions" element={<StudySessions />} />
+      <Route path="/progress" element={<StudyProgress />} />
       <Route path="/notes" element={<NotesResources />} />
       <Route path="/tasks" element={<MyTasks />} />
-      <Route path="/timer" element={<StudyTimer />} />
       <Route path="/messages" element={<Messages />} />
       <Route path="/qa" element={<QA />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
