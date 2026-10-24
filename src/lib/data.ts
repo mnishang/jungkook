@@ -5,12 +5,4 @@ export const buddies: Buddy[] = [
   { name: 'Angelica Cruz', year: 'BSIT 2nd Year', subjects: ['Python', 'Data Structures', 'AI'], match: 78, time: '1–4 PM', initials: 'AC' },
   { name: 'Mark Dela Cruz', year: 'BSIT 3rd Year', subjects: ['Networking', 'Cybersec', 'Linux'], match: 74, time: '8–11 PM', initials: 'MD' }
 ]
-export type Group = { name: string; members: number; topic: string; icon: string }
-export const groups: Group[] = [
-  { name: 'Java Programming', members: 12, topic: 'OOP, classes, and coding practice', icon: '⌘' },
-  { name: 'Database Management', members: 18, topic: 'SQL, ERD, and normalization', icon: '▤' },
-  { name: 'Networking', members: 15, topic: 'Networking basics and labs', icon: '⌘' },
-  { name: 'Web Development', members: 10, topic: 'React, HTML, CSS, and JavaScript', icon: '⌘' },
-  { name: 'Mathematics', members: 20, topic: 'Problem solving and exam review', icon: '∑' },
-  { name: 'IT Fundamentals', members: 14, topic: 'Core IT concepts and reviewers', icon: '▣' }
-]
+

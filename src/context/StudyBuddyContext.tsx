@@ -1,15 +1,29 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { sessionStudyPoints, TASK_COMPLETION_POINTS, taskDueLabel, todayKey } from '../lib/utils'
 
-type Task = { id: number; title: string; due: string; done: boolean }
+export type Task = { id: string; title: string; description: string; subject: string; sessionId: string; due: string; dueDate: string; done: boolean; createdAt: number; completedAt?: number }
+export type TaskInput = { title: string; description?: string; subject?: string; sessionId?: string; dueDate?: string }
+export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'subject' | 'sessionId' | 'dueDate' | 'done'>>
 export type User = { name: string; email: string; photo: string | null; course: string; year: string; bio: string; subjects: string[]; streak: number; points: number; connectedBuddies: string[]; lastLoginDate: string; notifMessages: boolean }
-export type Session = { id: string; title: string; date: string; time: string; people: number; joined: boolean; code: string }
+export type MeetingPlatform = 'Google Meet' | 'Zoom' | 'Microsoft Teams'
+export type Session = { id: string; owner: string; title: string; date: string; time: string; people: number; joined: boolean; code: string; subject: string; description: string; platform: MeetingPlatform; link: string; attendees: string[] }
+export type StudyRecord = { id: string; sessionId: string; title: string; subject: string; start: number; end: number; durationMs: number; completedAt: number }
+export type StudyPointEntry = { id: string; at: number; points: number; source: 'session' | 'task'; refId: string; subject: string }
+export type LeaderboardTask = Pick<Task, 'id' | 'subject' | 'done' | 'completedAt' | 'createdAt'>
+export type LeaderboardRecord = Pick<StudyRecord, 'id' | 'subject' | 'start' | 'end' | 'durationMs' | 'completedAt'>
+export type ActiveStudy = { id: string; sessionId: string; title: string; subject: string; startedAt: number }
+export type StudyActionResult = { ok: boolean; error?: string; record?: StudyRecord }
 export type ResourceFile = { id: string; name: string; type: string; size: number; data: string; by: string; at: number }
 export type SharedFile = { id: string; name: string; type: string; size: number; data: string; by: string; to: string; at: number }
 export type QAQuestion = { id: string; title: string; tag: string; by: string; at: number }
 export type QAAnswer = { id: string; questionId: string; text: string; by: string; at: number }
 export type AppNotification = { id: string; text: string; at: number; kind: string; read: boolean }
 type AccountMap = Record<string, User>
-type ContextValue = { tasks: Task[]; toggleTask: (id: number) => void; addTask: (title: string) => void; deleteTask: (id: number) => void; user: User; updateUser: (patch: Partial<User>) => void; createAccount: (name: string, email?: string) => void; login: (key: string) => boolean; connectBuddy: (name: string) => void; disconnectBuddy: (name: string) => void; allUsers: User[]; unread: Record<string, number>; clearUnread: (userName: string) => void; notifications: AppNotification[]; unreadNotifs: number; markAllRead: () => void; notifyGroupPost: (groupName: string, summary: string) => void; sessions: Session[]; createSession: (data: { title: string; date: string; time: string; code: string }) => void; joinSession: (id: string) => void; deleteSession: (id: string) => void; resources: ResourceFile[]; sharedFiles: SharedFile[]; uploadResource: (f: { name: string; type: string; size: number; data: string }) => boolean; sendSharedFile: (to: string, f: { name: string; type: string; size: number; data: string }) => { ok: boolean; id: string }; deleteResource: (id: string) => void; fileError: string; clearFileError: () => void; questions: QAQuestion[]; answers: QAAnswer[]; addQuestion: (title: string, tag: string) => void; addAnswer: (questionId: string, text: string) => void; deleteQuestion: (id: string) => void; deleteAccount: () => void }
+type TaskMap = Record<string, Task[]>
+type RecordMap = Record<string, StudyRecord[]>
+type PointMap = Record<string, StudyPointEntry[]>
+type ActiveMap = Record<string, ActiveStudy>
+type ContextValue = { tasks: Task[]; toggleTask: (id: string) => void; addTask: (input: TaskInput | string) => void; updateTask: (id: string, patch: TaskPatch) => void; deleteTask: (id: string) => void; user: User; updateUser: (patch: Partial<User>) => void; createAccount: (name: string, email?: string) => void; login: (key: string) => boolean; connectBuddy: (name: string) => void; disconnectBuddy: (name: string) => void; allUsers: User[]; unread: Record<string, number>; clearUnread: (userName: string) => void; notifications: AppNotification[]; unreadNotifs: number; markAllRead: () => void; notifyGroupPost: (groupName: string, summary: string) => void; sessions: Session[]; createSession: (data: { title: string; date: string; time: string; code: string; subject: string; description: string; platform: MeetingPlatform; link: string }) => void; deleteSession: (id: string) => void; activeStudy: ActiveStudy | null; studyRecords: StudyRecord[]; leaderboardTasks: Record<string, LeaderboardTask[]>; leaderboardRecords: Record<string, LeaderboardRecord[]>; leaderboardPoints: Record<string, StudyPointEntry[]>; startStudy: (id: string) => StudyActionResult; endStudy: () => StudyActionResult; resources: ResourceFile[]; sharedFiles: SharedFile[]; uploadResource: (f: { name: string; type: string; size: number; data: string }) => boolean; sendSharedFile: (to: string, f: { name: string; type: string; size: number; data: string }) => { ok: boolean; id: string }; deleteResource: (id: string) => void; fileError: string; clearFileError: () => void; questions: QAQuestion[]; answers: QAAnswer[]; addQuestion: (title: string, tag: string) => void; addAnswer: (questionId: string, text: string) => void; deleteQuestion: (id: string) => void; deleteAccount: () => void }
 const StudyBuddyContext = createContext<ContextValue | null>(null)
 
 const USER_KEY = 'studybuddy-user'
@@ -22,6 +36,10 @@ const SHARED_KEY = 'studybuddy-shared-files'
 const QUESTIONS_KEY = 'studybuddy-questions'
 const ANSWERS_KEY = 'studybuddy-answers'
 const TASKS_KEY = 'studybuddy-tasks'
+const TASK_MAP_KEY = 'studybuddy-tasks-v2'
+const ACTIVE_STUDY_KEY = 'studybuddy-active-study'
+const STUDY_RECORDS_KEY = 'studybuddy-study-records'
+const STUDY_POINTS_KEY = 'studybuddy-study-points'
 const NOTIF_KEY = 'studybuddy-notifications'
 const WELCOME_KEY = 'studybuddy-bot-welcome'
 const BOT_WELCOME = "👋 Hi there! Welcome back to StudyBuddy! 📚\n\nReady to learn together? Connect with fellow students, share knowledge, and achieve your study goals. Let's make learning fun! 🎓"
@@ -81,6 +99,16 @@ function loadUser(): User {
   return defaultUser
 }
 
+/** Resolves legacy session owners from an email, account key, or display name. */
+function ownerKeyFor(value: string): string {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return ''
+  const accounts = loadAccounts()
+  if (accounts[normalized]) return normalized
+  const match = Object.values(accounts).find(account => account.name.trim().toLowerCase() === normalized)
+  return match ? keyOf(match) : normalized
+}
+
 function loadUnread(): Record<string, number> {
   try {
     const raw = localStorage.getItem(UNREAD_KEY)
@@ -89,12 +117,60 @@ function loadUnread(): Record<string, number> {
   return {}
 }
 
+function normalizePlatform(value: unknown): MeetingPlatform {
+  return value === 'Zoom' || value === 'Microsoft Teams' ? value : 'Google Meet'
+}
+
+function normalizeSession(raw: Partial<Session> & { title: string; date: string; createdBy?: unknown }): Session {
+  const attendees = Array.isArray(raw.attendees) ? raw.attendees.filter((a): a is string => typeof a === 'string') : []
+  const ownerSource = typeof raw.owner === 'string' && raw.owner
+    ? raw.owner
+    : typeof raw.createdBy === 'string' && raw.createdBy
+      ? raw.createdBy
+      : attendees[0] ?? ''
+  return {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    owner: ownerKeyFor(ownerSource),
+    title: raw.title,
+    date: raw.date,
+    time: typeof raw.time === 'string' && raw.time ? raw.time : '00:00',
+    people: typeof raw.people === 'number' && Number.isFinite(raw.people) ? raw.people : 1,
+    joined: !!raw.joined,
+    code: typeof raw.code === 'string' ? raw.code : '',
+    subject: typeof raw.subject === 'string' ? raw.subject : '',
+    description: typeof raw.description === 'string' ? raw.description : '',
+    platform: normalizePlatform(raw.platform),
+    link: typeof raw.link === 'string' ? raw.link : '',
+    attendees
+  }
+}
+
 function loadSessions(): Session[] {
   try {
     const raw = localStorage.getItem(SESSIONS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed.filter(s => s && typeof s.title === 'string' && typeof s.date === 'string')
+      if (Array.isArray(parsed)) {
+        const fallbackOwner = keyOf(loadUser())
+        let migratedSessionVisibility = false
+        const sessions = parsed
+          .filter(s => s && typeof s.title === 'string' && typeof s.date === 'string')
+          .map(rawSession => {
+            const hadExplicitOwner = typeof rawSession.owner === 'string' && rawSession.owner.trim() !== ''
+            const session = normalizeSession(rawSession)
+            if (!session.owner) {
+              session.owner = fallbackOwner
+              migratedSessionVisibility = true
+            } else if (!hadExplicitOwner) {
+              migratedSessionVisibility = true
+            }
+            return session
+          })
+        if (migratedSessionVisibility) {
+          try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)) } catch { /* ignore */ }
+        }
+        return sessions
+      }
     }
   } catch { /* ignore */ }
   return []
@@ -148,20 +224,124 @@ function loadAnswers(): QAAnswer[] {
   return []
 }
 
-function loadTasks(): Task[] {
+function normalizeTask(raw: Partial<Task> & { title?: unknown }, index = 0): Task {
+  const dueDate = typeof raw.dueDate === 'string' ? raw.dueDate : ''
+  return {
+    id: raw.id != null && String(raw.id) ? String(raw.id) : `task-${Date.now()}-${index}`,
+    title: typeof raw.title === 'string' ? raw.title.trim() : '',
+    description: typeof raw.description === 'string' ? raw.description : '',
+    subject: typeof raw.subject === 'string' ? raw.subject : '',
+    sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : '',
+    due: typeof raw.due === 'string' && raw.due ? raw.due : taskDueLabel(dueDate),
+    dueDate,
+    done: !!raw.done,
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+    completedAt: typeof raw.completedAt === 'number'
+      ? raw.completedAt
+      : (raw.done && typeof raw.createdAt === 'number' ? raw.createdAt : undefined)
+  }
+}
+
+function loadTaskMap(): TaskMap {
   try {
-    const raw = localStorage.getItem(TASKS_KEY)
+    const raw = localStorage.getItem(TASK_MAP_KEY)
     if (raw !== null) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed.filter((t): t is Task => !!t && typeof t.title === 'string' && typeof t.due === 'string' && typeof t.done === 'boolean')
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const map: TaskMap = {}
+        for (const [owner, list] of Object.entries(parsed)) {
+          if (!Array.isArray(list)) continue
+          map[owner] = list.filter(t => t && typeof t.title === 'string').map(normalizeTask)
+        }
+        return map
+      }
     }
   } catch { /* ignore */ }
-  return [
-    { id: 1, title: 'Review Chapter 1', due: 'Today', done: true },
-    { id: 2, title: 'Finish Java activity', due: 'Today', done: false },
-    { id: 3, title: 'Study for quiz', due: 'Tomorrow', done: false },
-    { id: 4, title: 'Read Database notes', due: 'Oct 10', done: false }
-  ]
+  // Migrate the old shared task list to the current account once.
+  try {
+    const legacyRaw = localStorage.getItem(TASKS_KEY)
+    if (legacyRaw !== null) {
+      const parsed = JSON.parse(legacyRaw)
+      if (Array.isArray(parsed)) {
+        const list = parsed.filter(t => t && typeof t.title === 'string').map(normalizeTask)
+        const map: TaskMap = { [keyOf(loadUser())]: list }
+        try { localStorage.setItem(TASK_MAP_KEY, JSON.stringify(map)) } catch { /* ignore */ }
+        return map
+      }
+    }
+  } catch { /* ignore */ }
+  return {}
+}
+
+function loadActiveMap(): ActiveMap {
+  try {
+    const raw = localStorage.getItem(ACTIVE_STUDY_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const map: ActiveMap = {}
+        for (const [owner, value] of Object.entries(parsed)) {
+          const active = value as Partial<ActiveStudy>
+          if (!active || typeof active.sessionId !== 'string' || typeof active.startedAt !== 'number' || !Number.isFinite(active.startedAt)) continue
+          map[owner] = {
+            id: typeof active.id === 'string' && active.id ? active.id : `${active.startedAt}-${active.sessionId}`,
+            sessionId: active.sessionId,
+            title: typeof active.title === 'string' ? active.title : 'Study session',
+            subject: typeof active.subject === 'string' ? active.subject : '',
+            startedAt: active.startedAt
+          }
+        }
+        return map
+      }
+    }
+  } catch { /* ignore */ }
+  return {}
+}
+
+function loadRecordMap(): RecordMap {
+  try {
+    const raw = localStorage.getItem(STUDY_RECORDS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const map: RecordMap = {}
+        for (const [owner, list] of Object.entries(parsed)) {
+          if (!Array.isArray(list)) continue
+          map[owner] = list.filter((r): r is StudyRecord =>
+            !!r && typeof r.id === 'string' && typeof r.sessionId === 'string' &&
+            typeof r.start === 'number' && typeof r.end === 'number' &&
+            typeof r.durationMs === 'number' && r.durationMs > 0 && r.end > r.start
+          )
+        }
+        return map
+      }
+    }
+  } catch { /* ignore */ }
+  return {}
+}
+
+function loadPointMap(): PointMap {
+  try {
+    const raw = localStorage.getItem(STUDY_POINTS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const map: PointMap = {}
+        for (const [owner, list] of Object.entries(parsed)) {
+          if (!Array.isArray(list)) continue
+          map[owner] = list.filter((entry): entry is StudyPointEntry =>
+            !!entry && typeof entry.id === 'string' && typeof entry.refId === 'string' &&
+            typeof entry.at === 'number' && Number.isFinite(entry.at) &&
+            typeof entry.points === 'number' && entry.points > 0 &&
+            (entry.source === 'session' || entry.source === 'task') &&
+            typeof entry.subject === 'string'
+          )
+        }
+        return map
+      }
+    }
+  } catch { /* ignore */ }
+  return {}
 }
 
 function loadNotifs(): Record<string, AppNotification[]> {
@@ -176,22 +356,42 @@ function loadNotifs(): Record<string, AppNotification[]> {
 }
 
 export function StudyBuddyProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(loadTasks)
   const [accounts, setAccounts] = useState<AccountMap>(loadAccounts)
   const [user, setUser] = useState<User>(loadUser)
   const [unread, setUnread] = useState<Record<string, number>>(loadUnread)
   const [sessions, setSessions] = useState<Session[]>(loadSessions)
+  const [taskMap, setTaskMap] = useState<TaskMap>(loadTaskMap)
+  const [activeMap, setActiveMap] = useState<ActiveMap>(loadActiveMap)
+  const [recordMap, setRecordMap] = useState<RecordMap>(loadRecordMap)
+  const [pointMap, setPointMap] = useState<PointMap>(loadPointMap)
   const [resources, setResources] = useState<ResourceFile[]>(loadResources)
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>(loadSharedFiles)
   const [questions, setQuestions] = useState<QAQuestion[]>(loadQuestions)
   const [answers, setAnswers] = useState<QAAnswer[]>(loadAnswers)
   const [fileError, setFileError] = useState('')
   const [notifMap, setNotifMap] = useState<Record<string, AppNotification[]>>(loadNotifs)
+  const sessionsRef = useRef(sessions)
+  const taskMapRef = useRef(taskMap)
+  const activeMapRef = useRef(activeMap)
+  const recordMapRef = useRef(recordMap)
+  const pointMapRef = useRef(pointMap)
+  const backfilledStudyPoints = useRef(false)
   const resourcesRef = useRef(resources)
   const sharedRef = useRef(sharedFiles)
   const questionsRef = useRef(questions)
   const answersRef = useRef(answers)
-  const tasksRef = useRef(tasks)
+
+  const userKey = keyOf(user)
+  const tasks = useMemo(() => taskMap[userKey] ?? [], [taskMap, userKey])
+  const activeStudy = activeMap[userKey] ?? null
+  const studyRecords = useMemo(() => recordMap[userKey] ?? [], [recordMap, userKey])
+  const visibleSessions = useMemo(() => sessions.filter(session => session.owner === userKey), [sessions, userKey])
+
+  useEffect(() => { sessionsRef.current = sessions }, [sessions])
+  useEffect(() => { taskMapRef.current = taskMap }, [taskMap])
+  useEffect(() => { activeMapRef.current = activeMap }, [activeMap])
+  useEffect(() => { recordMapRef.current = recordMap }, [recordMap])
+  useEffect(() => { pointMapRef.current = pointMap }, [pointMap])
 
   const saveUser = useCallback((u: User) => {
     setUser(u)
@@ -243,11 +443,103 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
   }, [user, accounts, pushNotif])
 
   const saveSessions = useCallback((v: Session[] | ((prev: Session[]) => Session[])) => {
-    setSessions(current => {
-      const next = typeof v === 'function' ? v(current) : v
-      try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
-      return next
-    })
+    const next = typeof v === 'function' ? v(sessionsRef.current) : v
+    sessionsRef.current = next
+    setSessions(next)
+    try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  }, [])
+
+  const saveTaskMap = useCallback((updater: (prev: TaskMap) => TaskMap) => {
+    const next = updater(taskMapRef.current)
+    taskMapRef.current = next
+    setTaskMap(next)
+    try { localStorage.setItem(TASK_MAP_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  }, [])
+
+  const saveActiveMap = useCallback((updater: (prev: ActiveMap) => ActiveMap) => {
+    const next = updater(activeMapRef.current)
+    activeMapRef.current = next
+    setActiveMap(next)
+    try { localStorage.setItem(ACTIVE_STUDY_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  }, [])
+
+  const saveRecordMap = useCallback((updater: (prev: RecordMap) => RecordMap) => {
+    const next = updater(recordMapRef.current)
+    recordMapRef.current = next
+    setRecordMap(next)
+    try { localStorage.setItem(STUDY_RECORDS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  }, [])
+
+  const savePointMap = useCallback((updater: (prev: PointMap) => PointMap) => {
+    const next = updater(pointMapRef.current)
+    pointMapRef.current = next
+    setPointMap(next)
+    try { localStorage.setItem(STUDY_POINTS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  }, [])
+
+  /** Records a study-point award once per activity, then mirrors it to the profile total. */
+  const awardStudyPoints = useCallback((owner: string, entry: StudyPointEntry): boolean => {
+    const current = pointMapRef.current
+    if ((current[owner] ?? []).some(item => item.id === entry.id)) return false
+    const next = { ...current, [owner]: [entry, ...(current[owner] ?? [])] }
+    pointMapRef.current = next
+    setPointMap(next)
+    try { localStorage.setItem(STUDY_POINTS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+
+    if (owner === keyOf(user)) {
+      const updated = { ...user, points: user.points + entry.points }
+      saveUser(updated)
+      saveAccount(updated)
+    }
+    return true
+  }, [user, saveUser, saveAccount])
+
+  // Existing session/task history predates the points ledger, so backfill it once.
+  useEffect(() => {
+    if (backfilledStudyPoints.current) return
+    backfilledStudyPoints.current = true
+    const current = pointMapRef.current
+    const additions: PointMap = {}
+    const add = (owner: string, entry: StudyPointEntry) => {
+      if ((current[owner] ?? []).some(item => item.id === entry.id)) return
+      if ((additions[owner] ?? []).some(item => item.id === entry.id)) return
+      additions[owner] = [...(additions[owner] ?? []), entry]
+    }
+
+    for (const [owner, records] of Object.entries(recordMapRef.current)) {
+      for (const record of records) {
+        const points = sessionStudyPoints(record.durationMs)
+        if (points > 0) add(owner, {
+          id: `session:${record.id}`,
+          at: record.completedAt,
+          points,
+          source: 'session',
+          refId: record.id,
+          subject: record.subject
+        })
+      }
+    }
+    for (const [owner, list] of Object.entries(taskMapRef.current)) {
+      for (const task of list) {
+        if (task.done) add(owner, {
+          id: `task:${task.id}`,
+          at: task.completedAt ?? task.createdAt,
+          points: TASK_COMPLETION_POINTS,
+          source: 'task',
+          refId: task.id,
+          subject: task.subject
+        })
+      }
+    }
+
+    if (Object.keys(additions).length === 0) return
+    const next = { ...current }
+    for (const [owner, entries] of Object.entries(additions)) {
+      next[owner] = [...entries, ...(next[owner] ?? [])]
+    }
+    pointMapRef.current = next
+    setPointMap(next)
+    try { localStorage.setItem(STUDY_POINTS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
   }, [])
 
   const saveResources = useCallback((updater: (prev: ResourceFile[]) => ResourceFile[]): boolean => {
@@ -278,26 +570,108 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(ANSWERS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
   }, [])
 
-  const createSession = useCallback((data: { title: string; date: string; time: string; code: string }) => {
+  const createSession = useCallback((data: { title: string; date: string; time: string; code: string; subject: string; description: string; platform: MeetingPlatform; link: string }) => {
+    const owner = keyOf(user)
     const s: Session = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      owner,
       title: data.title.trim(),
       date: data.date,
       time: data.time,
       code: data.code.trim(),
+      subject: data.subject.trim(),
+      description: data.description.trim(),
+      platform: normalizePlatform(data.platform),
+      link: data.link.trim(),
       people: 1,
-      joined: false
+      joined: false,
+      attendees: [owner]
     }
     saveSessions(current => [...current, s])
-  }, [saveSessions])
-
-  const joinSession = useCallback((id: string) => {
-    saveSessions(current => current.map(s => s.id === id && !s.joined ? { ...s, joined: true, people: s.people + 1 } : s))
-  }, [saveSessions])
+  }, [saveSessions, user])
 
   const deleteSession = useCallback((id: string) => {
-    saveSessions(current => current.filter(s => s.id !== id))
-  }, [saveSessions])
+    const owner = keyOf(user)
+    saveSessions(current => current.filter(s => s.id !== id || s.owner !== owner))
+  }, [saveSessions, user])
+
+  const startStudy = useCallback((id: string): StudyActionResult => {
+    const owner = keyOf(user)
+    const current = activeMapRef.current[owner]
+    if (current) {
+      if (current.sessionId === id) return { ok: true }
+      return { ok: false, error: 'You already have a study session in progress. End it before joining another one.' }
+    }
+    const session = sessionsRef.current.find(s => s.id === id && s.owner === owner)
+    if (!session) return { ok: false, error: 'This study session no longer exists.' }
+    if (session.date !== todayKey()) return { ok: false, error: 'You can join this session on its scheduled date.' }
+
+    const startedAt = Date.now()
+    const active: ActiveStudy = {
+      id: `${startedAt}-${Math.random().toString(36).slice(2, 7)}`,
+      sessionId: session.id,
+      title: session.title,
+      subject: session.subject,
+      startedAt
+    }
+    saveActiveMap(prev => ({ ...prev, [owner]: active }))
+    saveSessions(list => list.map(s => {
+      if (s.id !== id) return s
+      const attendees = s.attendees.includes(owner) ? s.attendees : [...s.attendees, owner]
+      return { ...s, joined: true, attendees, people: Math.max(1, s.people, attendees.length) }
+    }))
+    return { ok: true }
+  }, [user, saveActiveMap, saveSessions])
+
+  const endStudy = useCallback((): StudyActionResult => {
+    const owner = keyOf(user)
+    const active = activeMapRef.current[owner]
+    if (!active) return { ok: false, error: 'No active study session found.' }
+    const end = Date.now()
+    const durationMs = end - active.startedAt
+    if (!Number.isFinite(durationMs) || durationMs < 1000) {
+      return { ok: false, error: 'Study for at least a few seconds before ending the session.' }
+    }
+
+    const existing = (recordMapRef.current[owner] || []).find(r => r.id === active.id)
+    const record: StudyRecord = existing ?? {
+      id: active.id,
+      sessionId: active.sessionId,
+      title: active.title,
+      subject: active.subject,
+      start: active.startedAt,
+      end,
+      durationMs,
+      completedAt: end
+    }
+
+    let inserted = false
+    if (!existing) {
+      saveRecordMap(current => {
+        const list = current[owner] || []
+        if (list.some(r => r.id === record.id)) return current
+        inserted = true
+        return { ...current, [owner]: [record, ...list] }
+      })
+      const points = sessionStudyPoints(record.durationMs)
+      if (inserted && points > 0) {
+        awardStudyPoints(owner, {
+          id: `session:${record.id}`,
+          at: record.completedAt,
+          points,
+          source: 'session',
+          refId: record.id,
+          subject: record.subject
+        })
+      }
+    }
+    saveActiveMap(current => {
+      const next = { ...current }
+      delete next[owner]
+      return next
+    })
+    return { ok: true, record }
+  }, [user, saveRecordMap, saveActiveMap, awardStudyPoints])
 
   const uploadResource = useCallback((f: { name: string; type: string; size: number; data: string }): boolean => {
     const entry: ResourceFile = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: f.name, type: f.type, size: f.size, data: f.data, by: user.name, at: Date.now() }
@@ -347,6 +721,27 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
     })
     saveQuestions(prev => prev.filter(q => q.by !== name))
     saveAnswers(prev => prev.filter(a => a.by !== name))
+    saveTaskMap(current => {
+      const next = { ...current }
+      delete next[k]
+      return next
+    })
+    saveActiveMap(current => {
+      const next = { ...current }
+      delete next[k]
+      return next
+    })
+    saveRecordMap(current => {
+      const next = { ...current }
+      delete next[k]
+      return next
+    })
+    savePointMap(current => {
+      const next = { ...current }
+      delete next[k]
+      return next
+    })
+    saveSessions(current => current.filter(session => session.owner !== k))
     try { localStorage.removeItem(USER_KEY) } catch { /* ignore */ }
     setUnread(current => {
       const next = { ...current }
@@ -355,7 +750,7 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
       return next
     })
     setUser(defaultUser)
-  }, [user, saveQuestions, saveAnswers])
+  }, [user, saveQuestions, saveAnswers, saveTaskMap, saveActiveMap, saveRecordMap, savePointMap, saveSessions])
 
   const clearFileError = useCallback(() => setFileError(''), [])
 
@@ -384,13 +779,13 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
       saveUser(updated)
       saveAccount(updated)
       pushNotif(keyOf(found), `⭐ +10 points for logging in! Day ${streak} streak 🔥`, 'points')
-      const pending = tasksRef.current.filter(t => !t.done).length
+      const pending = (taskMap[keyOf(found)] || []).filter(t => !t.done).length
       if (pending > 0) pushNotif(keyOf(found), `📋 You still have ${pending} unfinished task${pending > 1 ? 's' : ''} waiting for you.`, 'task')
     } else {
       saveUser(found)
     }
     return true
-  }, [accounts, saveUser, saveAccount, pushNotif])
+  }, [accounts, taskMap, saveUser, saveAccount, pushNotif])
 
   const connectBuddy = useCallback((name: string) => {
     if (user.connectedBuddies.includes(name)) return
@@ -410,11 +805,81 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
   }, [user, saveUser, saveAccount])
 
   const saveTasks = useCallback((updater: (prev: Task[]) => Task[]) => {
-    const next = updater(tasksRef.current)
-    tasksRef.current = next
-    setTasks(next)
-    try { localStorage.setItem(TASKS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-  }, [])
+    const owner = keyOf(user)
+    saveTaskMap(current => ({ ...current, [owner]: updater(current[owner] || []) }))
+  }, [user, saveTaskMap])
+
+  const addTask = useCallback((input: TaskInput | string) => {
+    const data: TaskInput = typeof input === 'string' ? { title: input } : input
+    const title = data.title.trim()
+    if (!title) return
+    const dueDate = (data.dueDate || '').trim()
+    const task: Task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      description: (data.description || '').trim(),
+      subject: (data.subject || '').trim(),
+      sessionId: (data.sessionId || '').trim(),
+      dueDate,
+      due: taskDueLabel(dueDate),
+      done: false,
+      createdAt: Date.now()
+    }
+    saveTasks(current => [task, ...current])
+  }, [saveTasks])
+
+  const toggleTask = useCallback((id: string) => {
+    const owner = keyOf(user)
+    const task = (taskMapRef.current[owner] ?? []).find(item => item.id === id)
+    if (!task) return
+    const now = Date.now()
+    const nextDone = !task.done
+    saveTasks(current => current.map(item => item.id === id
+      ? { ...item, done: nextDone, completedAt: item.completedAt ?? now }
+      : item
+    ))
+    if (nextDone) {
+      awardStudyPoints(owner, {
+        id: `task:${id}`,
+        at: task.completedAt ?? now,
+        points: TASK_COMPLETION_POINTS,
+        source: 'task',
+        refId: id,
+        subject: task.subject
+      })
+    }
+  }, [user, saveTasks, awardStudyPoints])
+
+  const updateTask = useCallback((id: string, patch: TaskPatch) => {
+    const owner = keyOf(user)
+    const before = (taskMapRef.current[owner] ?? []).find(item => item.id === id)
+    const now = Date.now()
+    saveTasks(current => current.map(t => {
+      if (t.id !== id) return t
+      const next: Task = { ...t, ...patch }
+      if (typeof next.title === 'string') next.title = next.title.trim()
+      if (typeof next.description === 'string') next.description = next.description.trim()
+      if (typeof next.subject === 'string') next.subject = next.subject.trim()
+      if (typeof next.sessionId === 'string') next.sessionId = next.sessionId.trim()
+      if (typeof next.dueDate === 'string') next.dueDate = next.dueDate.trim()
+      if ('dueDate' in patch) next.due = taskDueLabel(next.dueDate)
+      if ('done' in patch) {
+        next.done = !!patch.done
+        if (next.done) next.completedAt = t.completedAt ?? now
+      }
+      return next
+    }))
+    if (before && patch.done === true && !before.done) {
+      awardStudyPoints(owner, {
+        id: `task:${id}`,
+        at: before.completedAt ?? now,
+        points: TASK_COMPLETION_POINTS,
+        source: 'task',
+        refId: id,
+        subject: typeof patch.subject === 'string' ? patch.subject.trim() : before.subject
+      })
+    }
+  }, [user, saveTasks, awardStudyPoints])
 
   const incrementUnread = useCallback((userName: string) => {
     const next = { ...unread, [userName]: (unread[userName] || 0) + 1 }
@@ -464,6 +929,23 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const onStudyStorage = (e: StorageEvent) => {
+      try {
+        if (e.key === TASK_MAP_KEY && e.newValue) setTaskMap(JSON.parse(e.newValue) || {})
+        if (e.key === ACTIVE_STUDY_KEY && e.newValue) setActiveMap(JSON.parse(e.newValue) || {})
+        if (e.key === STUDY_RECORDS_KEY && e.newValue) setRecordMap(JSON.parse(e.newValue) || {})
+        if (e.key === STUDY_POINTS_KEY && e.newValue) setPointMap(JSON.parse(e.newValue) || {})
+        if (e.key === SESSIONS_KEY && e.newValue) {
+          const parsed = JSON.parse(e.newValue)
+          if (Array.isArray(parsed)) setSessions(parsed.map(normalizeSession))
+        }
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('storage', onStudyStorage)
+    return () => window.removeEventListener('storage', onStudyStorage)
+  }, [])
+
+  useEffect(() => {
     if (user.name === BOT_NAME) return
     let welcomed: Record<string, boolean> = {}
     try { const raw = localStorage.getItem(WELCOME_KEY); if (raw) welcomed = JSON.parse(raw) } catch { /* ignore */ }
@@ -487,11 +969,41 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
 
   const allUsers = useMemo(() => Object.values(accounts).filter(u => keyOf(u) !== keyOf(user)), [accounts, user])
 
+  // Leaderboard consumers only need aggregate-safe activity fields, not private task text.
+  const leaderboardTasks = useMemo(() => {
+    const map: Record<string, LeaderboardTask[]> = {}
+    for (const [owner, list] of Object.entries(taskMap)) {
+      map[owner] = list.map(task => ({
+        id: task.id,
+        subject: task.subject,
+        done: task.done,
+        completedAt: task.completedAt,
+        createdAt: task.createdAt
+      }))
+    }
+    return map
+  }, [taskMap])
+  const leaderboardRecords = useMemo(() => {
+    const map: Record<string, LeaderboardRecord[]> = {}
+    for (const [owner, list] of Object.entries(recordMap)) {
+      map[owner] = list.map(record => ({
+        id: record.id,
+        subject: record.subject,
+        start: record.start,
+        end: record.end,
+        durationMs: record.durationMs,
+        completedAt: record.completedAt
+      }))
+    }
+    return map
+  }, [recordMap])
+
   const value = useMemo(() => ({
     tasks,
-    toggleTask: (id: number) => saveTasks(current => current.map(t => t.id === id ? { ...t, done: !t.done } : t)),
-    addTask: (title: string) => saveTasks(current => [...current, { id: Date.now(), title, due: 'Today', done: false }]),
-    deleteTask: (id: number) => saveTasks(current => current.filter(t => t.id !== id)),
+    toggleTask,
+    addTask,
+    updateTask,
+    deleteTask: (id: string) => saveTasks(current => current.filter(t => t.id !== id)),
     user,
     updateUser,
     createAccount,
@@ -506,10 +1018,16 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
     unreadNotifs,
     markAllRead,
     notifyGroupPost,
-    sessions,
+    sessions: visibleSessions,
     createSession,
-    joinSession,
     deleteSession,
+    activeStudy,
+    studyRecords,
+    leaderboardTasks,
+    leaderboardRecords,
+    leaderboardPoints: pointMap,
+    startStudy,
+    endStudy,
     resources,
     sharedFiles,
     uploadResource,
@@ -523,7 +1041,7 @@ export function StudyBuddyProvider({ children }: { children: ReactNode }) {
     addAnswer,
     deleteQuestion,
     deleteAccount
-  }), [tasks, user, updateUser, createAccount, login, connectBuddy, disconnectBuddy, allUsers, unread, incrementUnread, clearUnread, notifications, unreadNotifs, markAllRead, notifyGroupPost, sessions, createSession, joinSession, deleteSession, resources, sharedFiles, uploadResource, sendSharedFile, deleteResource, fileError, clearFileError, questions, answers, addQuestion, addAnswer, deleteQuestion, deleteAccount, saveTasks])
+  }), [tasks, toggleTask, addTask, updateTask, saveTasks, user, updateUser, createAccount, login, connectBuddy, disconnectBuddy, allUsers, unread, incrementUnread, clearUnread, notifications, unreadNotifs, markAllRead, notifyGroupPost, visibleSessions, createSession, deleteSession, activeStudy, studyRecords, leaderboardTasks, leaderboardRecords, pointMap, startStudy, endStudy, resources, sharedFiles, uploadResource, sendSharedFile, deleteResource, fileError, clearFileError, questions, answers, addQuestion, addAnswer, deleteQuestion, deleteAccount])
   return <StudyBuddyContext.Provider value={value}>{children}</StudyBuddyContext.Provider>
 }
 export function useStudyBuddy() {
